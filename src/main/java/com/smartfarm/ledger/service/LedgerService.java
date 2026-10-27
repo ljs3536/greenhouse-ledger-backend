@@ -12,6 +12,7 @@ import com.smartfarm.ledger.repo.GreenhouseRepository;
 import com.smartfarm.ledger.repo.MovementRepository;
 import com.smartfarm.ledger.repo.PlantRepository;
 import com.smartfarm.ledger.repo.StageChangeRepository;
+import com.smartfarm.ledger.web.dto.LedgerDtos.AttentionItem;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchDetailResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.GreenhouseSummary;
@@ -22,6 +23,7 @@ import com.smartfarm.ledger.web.dto.LedgerDtos.SummaryResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -85,7 +87,49 @@ public class LedgerService {
 		for (Stage stage : Stage.values()) {
 			stages.add(new StageQuantity(stage, stageQuantities.get(stage)));
 		}
-		return new SummaryResponse(greenhouseSummaries, plantSummaries, stages, total, sellable, allBatches.size());
+		List<AttentionItem> attention = attention(allBatches, quantities);
+		return new SummaryResponse(attention, greenhouseSummaries, plantSummaries, stages, total, sellable, allBatches.size());
+	}
+
+	private List<AttentionItem> attention(List<Batch> allBatches, Map<Long, Long> quantities) {
+		Map<Long, StageChange> latestChange = new HashMap<>();
+		for (StageChange change : stageChanges.findAllByOrderByChangedOnDescIdDesc()) {
+			latestChange.putIfAbsent(change.getBatch().getId(), change);
+		}
+		LocalDate today = LocalDate.now(SEOUL);
+		List<AttentionItem> items = new ArrayList<>();
+		for (Batch batch : allBatches) {
+			long quantity = quantities.getOrDefault(batch.getId(), 0L);
+			if (quantity <= 0) {
+				continue;
+			}
+			StageChange change = latestChange.get(batch.getId());
+			LocalDate enteredOn = change != null && change.getToStage() == batch.getStage()
+					? change.getChangedOn()
+					: batch.getPlantedOn();
+			int daysInStage = (int) Math.max(0, ChronoUnit.DAYS.between(enteredOn, today));
+			Integer referenceDays = batch.getPlant().referenceDays(batch.getStage());
+			boolean ready = batch.getStage() == Stage.READY;
+			boolean overdue = referenceDays != null && daysInStage >= referenceDays;
+			if (!ready && !overdue) {
+				continue;
+			}
+			items.add(new AttentionItem(
+					batch.getId(),
+					batch.getGreenhouse().getId(),
+					batch.getGreenhouse().getName(),
+					batch.getPlant().getName(),
+					batch.getStage(),
+					quantity,
+					daysInStage,
+					ready ? null : referenceDays));
+		}
+		items.sort(Comparator
+				.comparing((AttentionItem item) -> item.stage() == Stage.READY)
+				.thenComparing((AttentionItem item) -> item.stage() == Stage.READY
+						? -item.quantity()
+						: -(item.daysInStage() - item.referenceDays())));
+		return items;
 	}
 
 	@Transactional(readOnly = true)

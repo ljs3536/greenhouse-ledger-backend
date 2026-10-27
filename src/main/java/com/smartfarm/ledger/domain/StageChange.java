@@ -56,6 +56,10 @@ public class StageChange {
 		return id;
 	}
 
+	public Batch getBatch() {
+		return batch;
+	}
+
 	public Stage getFromStage() {
 		return fromStage;
 	}

@@ -21,6 +21,7 @@ public class SchemaMigrator implements ApplicationRunner {
 
 	@Override
 	public void run(ApplicationArguments args) {
+		ensureStageDayColumns();
 		if (!tableExists("batches")) {
 			return;
 		}
@@ -43,6 +44,22 @@ public class SchemaMigrator implements ApplicationRunner {
 		addIndex("idx_batches_plant", "plant_id");
 		jdbc.execute("drop table houses");
 		log.info("moved fixed houses into greenhouses and plants");
+	}
+
+	private void ensureStageDayColumns() {
+		if (!tableExists("plants")) {
+			return;
+		}
+		addPlantDayColumn("seedling_days");
+		addPlantDayColumn("growth_days");
+		addPlantDayColumn("spike_days");
+		addPlantDayColumn("bloom_days");
+	}
+
+	private void addPlantDayColumn(String column) {
+		if (!columnExists("plants", column)) {
+			jdbc.execute("alter table plants add column " + identifier(column) + " int null");
+		}
 	}
 
 	private void copyMasters() {

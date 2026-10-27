@@ -81,12 +81,29 @@ public class LedgerController {
 	@PostMapping("/plants")
 	@ResponseStatus(HttpStatus.CREATED)
 	IdResponse createPlant(@Valid @RequestBody CreatePlantRequest request) {
-		return new IdResponse(catalog.createPlant(request.name(), request.dayTemp(), request.nightTemp(), request.lightNote()));
+		return new IdResponse(catalog.createPlant(
+				request.name(),
+				request.dayTemp(),
+				request.nightTemp(),
+				request.lightNote(),
+				request.seedlingDays(),
+				request.growthDays(),
+				request.spikeDays(),
+				request.bloomDays()));
 	}
 
 	@PatchMapping("/plants/{id}")
 	OkResponse updatePlant(@PathVariable long id, @Valid @RequestBody CreatePlantRequest request) {
-		catalog.updatePlant(id, request.name(), request.dayTemp(), request.nightTemp(), request.lightNote());
+		catalog.updatePlant(
+				id,
+				request.name(),
+				request.dayTemp(),
+				request.nightTemp(),
+				request.lightNote(),
+				request.seedlingDays(),
+				request.growthDays(),
+				request.spikeDays(),
+				request.bloomDays());
 		return new OkResponse(true);
 	}
 

@@ -4,6 +4,10 @@ CREATE TABLE IF NOT EXISTS plants (
   day_temp VARCHAR(40) NULL,
   night_temp VARCHAR(40) NULL,
   light_note VARCHAR(80) NULL,
+  seedling_days INT NULL,
+  growth_days INT NULL,
+  spike_days INT NULL,
+  bloom_days INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uk_plants_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

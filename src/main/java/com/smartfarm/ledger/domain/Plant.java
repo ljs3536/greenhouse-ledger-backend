@@ -29,6 +29,18 @@ public class Plant {
 	@Column(name = "light_note", length = 80)
 	private String lightNote;
 
+	@Column(name = "seedling_days")
+	private Integer seedlingDays;
+
+	@Column(name = "growth_days")
+	private Integer growthDays;
+
+	@Column(name = "spike_days")
+	private Integer spikeDays;
+
+	@Column(name = "bloom_days")
+	private Integer bloomDays;
+
 	@CreationTimestamp
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
@@ -36,18 +48,36 @@ public class Plant {
 	protected Plant() {
 	}
 
-	public Plant(String name, String dayTemp, String nightTemp, String lightNote) {
+	public Plant(String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays) {
 		this.name = name;
 		this.dayTemp = dayTemp;
 		this.nightTemp = nightTemp;
 		this.lightNote = lightNote;
+		this.seedlingDays = seedlingDays;
+		this.growthDays = growthDays;
+		this.spikeDays = spikeDays;
+		this.bloomDays = bloomDays;
 	}
 
-	public void update(String name, String dayTemp, String nightTemp, String lightNote) {
+	public void update(String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays) {
 		this.name = name;
 		this.dayTemp = dayTemp;
 		this.nightTemp = nightTemp;
 		this.lightNote = lightNote;
+		this.seedlingDays = seedlingDays;
+		this.growthDays = growthDays;
+		this.spikeDays = spikeDays;
+		this.bloomDays = bloomDays;
+	}
+
+	public Integer referenceDays(Stage stage) {
+		return switch (stage) {
+			case SEEDLING -> seedlingDays;
+			case GROWTH -> growthDays;
+			case SPIKE -> spikeDays;
+			case BLOOM -> bloomDays;
+			case READY -> null;
+		};
 	}
 
 	public Long getId() {
@@ -68,5 +98,21 @@ public class Plant {
 
 	public String getLightNote() {
 		return lightNote;
+	}
+
+	public Integer getSeedlingDays() {
+		return seedlingDays;
+	}
+
+	public Integer getGrowthDays() {
+		return growthDays;
+	}
+
+	public Integer getSpikeDays() {
+		return spikeDays;
+	}
+
+	public Integer getBloomDays() {
+		return bloomDays;
 	}
 }

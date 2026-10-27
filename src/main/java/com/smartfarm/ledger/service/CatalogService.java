@@ -52,6 +52,10 @@ public class CatalogService {
 						plant.getDayTemp(),
 						plant.getNightTemp(),
 						plant.getLightNote(),
+						plant.getSeedlingDays(),
+						plant.getGrowthDays(),
+						plant.getSpikeDays(),
+						plant.getBloomDays(),
 						counts.getOrDefault(plant.getId(), 0L)))
 				.toList();
 	}
@@ -84,19 +88,27 @@ public class CatalogService {
 	}
 
 	@Transactional
-	public long createPlant(String name, String dayTemp, String nightTemp, String lightNote) {
+	public long createPlant(String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays) {
 		String trimmed = requireName(name, "식물 이름을 입력해 주세요.");
 		ensurePlantNameFree(trimmed, null);
-		return plants.save(new Plant(trimmed, blankToNull(dayTemp), blankToNull(nightTemp), blankToNull(lightNote))).getId();
+		return plants.save(new Plant(
+				trimmed,
+				blankToNull(dayTemp),
+				blankToNull(nightTemp),
+				blankToNull(lightNote),
+				seedlingDays,
+				growthDays,
+				spikeDays,
+				bloomDays)).getId();
 	}
 
 	@Transactional
-	public void updatePlant(long id, String name, String dayTemp, String nightTemp, String lightNote) {
+	public void updatePlant(long id, String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays) {
 		Plant plant = plants.findById(id)
 				.orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "식물을 찾을 수 없습니다."));
 		String trimmed = requireName(name, "식물 이름을 입력해 주세요.");
 		ensurePlantNameFree(trimmed, id);
-		plant.update(trimmed, blankToNull(dayTemp), blankToNull(nightTemp), blankToNull(lightNote));
+		plant.update(trimmed, blankToNull(dayTemp), blankToNull(nightTemp), blankToNull(lightNote), seedlingDays, growthDays, spikeDays, bloomDays);
 	}
 
 	@Transactional

@@ -6,4 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface StageChangeRepository extends JpaRepository<StageChange, Long> {
 	List<StageChange> findByBatchIdOrderByChangedOnDescIdDesc(Long batchId);
+
+	List<StageChange> findAllByOrderByChangedOnDescIdDesc();
 }

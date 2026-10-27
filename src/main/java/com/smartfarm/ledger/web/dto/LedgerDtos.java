@@ -23,7 +23,11 @@ public final class LedgerDtos {
 			@NotBlank(message = "식물 이름을 입력해 주세요.") @Size(max = 40, message = "이름은 40자까지 입력할 수 있습니다.") String name,
 			@Size(max = 40, message = "낮 온도는 40자까지 입력할 수 있습니다.") String dayTemp,
 			@Size(max = 40, message = "밤 온도는 40자까지 입력할 수 있습니다.") String nightTemp,
-			@Size(max = 80, message = "광 메모는 80자까지 입력할 수 있습니다.") String lightNote) {
+			@Size(max = 80, message = "광 메모는 80자까지 입력할 수 있습니다.") String lightNote,
+			@Min(value = 1, message = "기준 일수는 1 이상의 정수입니다.") @Max(value = 3650, message = "기준 일수는 3650일까지 적을 수 있습니다.") Integer seedlingDays,
+			@Min(value = 1, message = "기준 일수는 1 이상의 정수입니다.") @Max(value = 3650, message = "기준 일수는 3650일까지 적을 수 있습니다.") Integer growthDays,
+			@Min(value = 1, message = "기준 일수는 1 이상의 정수입니다.") @Max(value = 3650, message = "기준 일수는 3650일까지 적을 수 있습니다.") Integer spikeDays,
+			@Min(value = 1, message = "기준 일수는 1 이상의 정수입니다.") @Max(value = 3650, message = "기준 일수는 3650일까지 적을 수 있습니다.") Integer bloomDays) {
 	}
 
 	public record CreateBatchRequest(
@@ -48,7 +52,28 @@ public final class LedgerDtos {
 	public record GreenhouseResponse(long id, String name, long batchCount) {
 	}
 
-	public record PlantResponse(long id, String name, String dayTemp, String nightTemp, String lightNote, long batchCount) {
+	public record PlantResponse(
+			long id,
+			String name,
+			String dayTemp,
+			String nightTemp,
+			String lightNote,
+			Integer seedlingDays,
+			Integer growthDays,
+			Integer spikeDays,
+			Integer bloomDays,
+			long batchCount) {
+	}
+
+	public record AttentionItem(
+			long batchId,
+			long greenhouseId,
+			String greenhouseName,
+			String plantName,
+			Stage stage,
+			long quantity,
+			int daysInStage,
+			Integer referenceDays) {
 	}
 
 	public record GreenhouseSummary(long id, String name, long batchCount, long totalQuantity, long sellableQuantity) {
@@ -69,6 +94,7 @@ public final class LedgerDtos {
 	}
 
 	public record SummaryResponse(
+			List<AttentionItem> attention,
 			List<GreenhouseSummary> greenhouses,
 			List<PlantSummary> plants,
 			List<StageQuantity> stages,
