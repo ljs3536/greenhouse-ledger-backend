@@ -24,8 +24,12 @@ public class Batch {
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "house_id", nullable = false)
-	private House house;
+	@JoinColumn(name = "greenhouse_id", nullable = false)
+	private Greenhouse greenhouse;
+
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "plant_id", nullable = false)
+	private Plant plant;
 
 	@Column(name = "planted_on", nullable = false)
 	private LocalDate plantedOn;
@@ -44,8 +48,9 @@ public class Batch {
 	protected Batch() {
 	}
 
-	public Batch(House house, LocalDate plantedOn, Stage stage, String note) {
-		this.house = house;
+	public Batch(Greenhouse greenhouse, Plant plant, LocalDate plantedOn, Stage stage, String note) {
+		this.greenhouse = greenhouse;
+		this.plant = plant;
 		this.plantedOn = plantedOn;
 		this.stage = stage;
 		this.note = note;
@@ -59,8 +64,12 @@ public class Batch {
 		return id;
 	}
 
-	public House getHouse() {
-		return house;
+	public Greenhouse getGreenhouse() {
+		return greenhouse;
+	}
+
+	public Plant getPlant() {
+		return plant;
 	}
 
 	public LocalDate getPlantedOn() {

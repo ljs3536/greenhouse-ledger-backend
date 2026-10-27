@@ -1,23 +1,32 @@
-CREATE TABLE IF NOT EXISTS houses (
+CREATE TABLE IF NOT EXISTS plants (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  code VARCHAR(8) NOT NULL UNIQUE,
   name VARCHAR(40) NOT NULL,
-  crop_code VARCHAR(32) NOT NULL UNIQUE,
-  crop_name VARCHAR(40) NOT NULL,
-  day_temp VARCHAR(40) NOT NULL,
-  night_temp VARCHAR(40) NOT NULL,
-  light_note VARCHAR(80) NOT NULL
+  day_temp VARCHAR(40) NULL,
+  night_temp VARCHAR(40) NULL,
+  light_note VARCHAR(80) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_plants_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS greenhouses (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(40) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_greenhouses_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS batches (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  house_id INT NOT NULL,
+  greenhouse_id INT NOT NULL,
+  plant_id INT NOT NULL,
   planted_on DATE NOT NULL,
   stage ENUM('SEEDLING', 'GROWTH', 'SPIKE', 'BLOOM', 'READY') NOT NULL DEFAULT 'SEEDLING',
   note VARCHAR(200) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_batches_house FOREIGN KEY (house_id) REFERENCES houses (id),
-  INDEX idx_batches_house (house_id)
+  CONSTRAINT fk_batches_greenhouse FOREIGN KEY (greenhouse_id) REFERENCES greenhouses (id),
+  CONSTRAINT fk_batches_plant FOREIGN KEY (plant_id) REFERENCES plants (id),
+  INDEX idx_batches_greenhouse (greenhouse_id),
+  INDEX idx_batches_plant (plant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS movements (

@@ -4,6 +4,7 @@ import com.smartfarm.ledger.domain.MovementType;
 import com.smartfarm.ledger.domain.Stage;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
@@ -14,8 +15,20 @@ public final class LedgerDtos {
 	private LedgerDtos() {
 	}
 
+	public record CreateGreenhouseRequest(
+			@NotBlank(message = "온실 이름을 입력해 주세요.") @Size(max = 40, message = "이름은 40자까지 입력할 수 있습니다.") String name) {
+	}
+
+	public record CreatePlantRequest(
+			@NotBlank(message = "식물 이름을 입력해 주세요.") @Size(max = 40, message = "이름은 40자까지 입력할 수 있습니다.") String name,
+			@Size(max = 40, message = "낮 온도는 40자까지 입력할 수 있습니다.") String dayTemp,
+			@Size(max = 40, message = "밤 온도는 40자까지 입력할 수 있습니다.") String nightTemp,
+			@Size(max = 80, message = "광 메모는 80자까지 입력할 수 있습니다.") String lightNote) {
+	}
+
 	public record CreateBatchRequest(
-			@NotNull(message = "하우스를 선택해 주세요.") @Min(value = 1, message = "하우스를 선택해 주세요.") Long houseId,
+			@NotNull(message = "온실을 선택해 주세요.") @Min(value = 1, message = "온실을 선택해 주세요.") Long greenhouseId,
+			@NotNull(message = "식물을 선택해 주세요.") @Min(value = 1, message = "식물을 선택해 주세요.") Long plantId,
 			@NotNull(message = "심은 날 형식이 올바르지 않습니다.") LocalDate plantedOn,
 			Stage stage,
 			@NotNull(message = "수량은 1 이상의 정수입니다.") @Min(value = 1, message = "수량은 1 이상의 정수입니다.") @Max(value = 100_000, message = "수량은 1 이상의 정수입니다.") Integer quantity,
@@ -32,12 +45,18 @@ public final class LedgerDtos {
 			@Size(max = 200, message = "글자는 200자까지 남길 수 있습니다.") String memo) {
 	}
 
-	public record HouseSummary(
+	public record GreenhouseResponse(long id, String name, long batchCount) {
+	}
+
+	public record PlantResponse(long id, String name, String dayTemp, String nightTemp, String lightNote, long batchCount) {
+	}
+
+	public record GreenhouseSummary(long id, String name, long batchCount, long totalQuantity, long sellableQuantity) {
+	}
+
+	public record PlantSummary(
 			long id,
-			String code,
 			String name,
-			String cropCode,
-			String cropName,
 			String dayTemp,
 			String nightTemp,
 			String lightNote,
@@ -46,15 +65,24 @@ public final class LedgerDtos {
 			long sellableQuantity) {
 	}
 
-	public record SummaryResponse(List<HouseSummary> houses, long totalQuantity, long sellableQuantity, long batchCount) {
+	public record StageQuantity(Stage stage, long quantity) {
+	}
+
+	public record SummaryResponse(
+			List<GreenhouseSummary> greenhouses,
+			List<PlantSummary> plants,
+			List<StageQuantity> stages,
+			long totalQuantity,
+			long sellableQuantity,
+			long batchCount) {
 	}
 
 	public record BatchResponse(
 			long id,
-			long houseId,
-			String houseName,
-			String cropCode,
-			String cropName,
+			long greenhouseId,
+			String greenhouseName,
+			long plantId,
+			String plantName,
 			LocalDate plantedOn,
 			Stage stage,
 			String note,
@@ -74,10 +102,10 @@ public final class LedgerDtos {
 
 	public record BatchDetailResponse(
 			long id,
-			long houseId,
-			String houseName,
-			String cropCode,
-			String cropName,
+			long greenhouseId,
+			String greenhouseName,
+			long plantId,
+			String plantName,
 			LocalDate plantedOn,
 			Stage stage,
 			String note,

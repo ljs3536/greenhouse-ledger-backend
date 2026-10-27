@@ -1,19 +1,23 @@
 package com.smartfarm.ledger.service;
 
 import com.smartfarm.ledger.domain.Batch;
-import com.smartfarm.ledger.domain.House;
+import com.smartfarm.ledger.domain.Greenhouse;
 import com.smartfarm.ledger.domain.Movement;
 import com.smartfarm.ledger.domain.MovementType;
+import com.smartfarm.ledger.domain.Plant;
 import com.smartfarm.ledger.domain.Stage;
 import com.smartfarm.ledger.domain.StageChange;
 import com.smartfarm.ledger.repo.BatchRepository;
-import com.smartfarm.ledger.repo.HouseRepository;
+import com.smartfarm.ledger.repo.GreenhouseRepository;
 import com.smartfarm.ledger.repo.MovementRepository;
+import com.smartfarm.ledger.repo.PlantRepository;
 import com.smartfarm.ledger.repo.StageChangeRepository;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchDetailResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchResponse;
+import com.smartfarm.ledger.web.dto.LedgerDtos.GreenhouseSummary;
 import com.smartfarm.ledger.web.dto.LedgerDtos.HistoryItem;
-import com.smartfarm.ledger.web.dto.LedgerDtos.HouseSummary;
+import com.smartfarm.ledger.web.dto.LedgerDtos.PlantSummary;
+import com.smartfarm.ledger.web.dto.LedgerDtos.StageQuantity;
 import com.smartfarm.ledger.web.dto.LedgerDtos.SummaryResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -32,17 +36,20 @@ public class LedgerService {
 
 	private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
-	private final HouseRepository houses;
+	private final GreenhouseRepository greenhouses;
+	private final PlantRepository plants;
 	private final BatchRepository batches;
 	private final MovementRepository movements;
 	private final StageChangeRepository stageChanges;
 
 	public LedgerService(
-			HouseRepository houses,
+			GreenhouseRepository greenhouses,
+			PlantRepository plants,
 			BatchRepository batches,
 			MovementRepository movements,
 			StageChangeRepository stageChanges) {
-		this.houses = houses;
+		this.greenhouses = greenhouses;
+		this.plants = plants;
 		this.batches = batches;
 		this.movements = movements;
 		this.stageChanges = stageChanges;
@@ -51,29 +58,47 @@ public class LedgerService {
 	@Transactional(readOnly = true)
 	public SummaryResponse summary() {
 		Map<Long, Long> quantities = quantitiesByBatch();
-		List<Batch> allBatches = batches.findAllWithHouse();
-		List<HouseSummary> houseSummaries = houses.findAll().stream()
-				.sorted(Comparator.comparing(House::getId))
-				.map(house -> summarize(house, allBatches, quantities))
+		List<Batch> allBatches = batches.findAllWithDetails();
+		List<GreenhouseSummary> greenhouseSummaries = greenhouses.findAll().stream()
+				.sorted(Comparator.comparing(Greenhouse::getId))
+				.map(greenhouse -> summarizeGreenhouse(greenhouse, allBatches, quantities))
 				.toList();
-		return new SummaryResponse(
-				houseSummaries,
-				houseSummaries.stream().mapToLong(HouseSummary::totalQuantity).sum(),
-				houseSummaries.stream().mapToLong(HouseSummary::sellableQuantity).sum(),
-				houseSummaries.stream().mapToLong(HouseSummary::batchCount).sum());
+		List<PlantSummary> plantSummaries = plants.findAll().stream()
+				.sorted(Comparator.comparing(Plant::getName))
+				.map(plant -> summarizePlant(plant, allBatches, quantities))
+				.toList();
+		long total = 0;
+		long sellable = 0;
+		Map<Stage, Long> stageQuantities = new HashMap<>();
+		for (Stage stage : Stage.values()) {
+			stageQuantities.put(stage, 0L);
+		}
+		for (Batch batch : allBatches) {
+			long quantity = quantities.getOrDefault(batch.getId(), 0L);
+			total += quantity;
+			stageQuantities.merge(batch.getStage(), quantity, Long::sum);
+			if (batch.getStage() == Stage.READY) {
+				sellable += quantity;
+			}
+		}
+		List<StageQuantity> stages = new ArrayList<>();
+		for (Stage stage : Stage.values()) {
+			stages.add(new StageQuantity(stage, stageQuantities.get(stage)));
+		}
+		return new SummaryResponse(greenhouseSummaries, plantSummaries, stages, total, sellable, allBatches.size());
 	}
 
 	@Transactional(readOnly = true)
 	public List<BatchResponse> listBatches() {
 		Map<Long, Long> quantities = quantitiesByBatch();
-		return batches.findAllWithHouse().stream()
+		return batches.findAllWithDetails().stream()
 				.map(batch -> toResponse(batch, quantities.getOrDefault(batch.getId(), 0L)))
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
 	public BatchDetailResponse batch(long id) {
-		Batch batch = batches.findWithHouse(id)
+		Batch batch = batches.findWithDetails(id)
 				.orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "배치를 찾을 수 없습니다."));
 		long quantity = number(movements.quantityOf(id));
 		List<Stamp> history = new ArrayList<>();
@@ -112,10 +137,10 @@ public class LedgerService {
 		BatchResponse response = toResponse(batch, quantity);
 		return new BatchDetailResponse(
 				response.id(),
-				response.houseId(),
-				response.houseName(),
-				response.cropCode(),
-				response.cropName(),
+				response.greenhouseId(),
+				response.greenhouseName(),
+				response.plantId(),
+				response.plantName(),
 				response.plantedOn(),
 				response.stage(),
 				response.note(),
@@ -124,12 +149,14 @@ public class LedgerService {
 	}
 
 	@Transactional
-	public long createBatch(long houseId, LocalDate plantedOn, Stage stage, int quantity, String note) {
-		House house = houses.findById(houseId)
-				.orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "하우스를 찾을 수 없습니다."));
+	public long createBatch(long greenhouseId, long plantId, LocalDate plantedOn, Stage stage, int quantity, String note) {
+		Greenhouse greenhouse = greenhouses.findById(greenhouseId)
+				.orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "온실을 찾을 수 없습니다."));
+		Plant plant = plants.findById(plantId)
+				.orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "식물을 찾을 수 없습니다."));
 		Stage initialStage = stage == null ? Stage.SEEDLING : stage;
 		String trimmedNote = blankToNull(note);
-		Batch batch = batches.save(new Batch(house, plantedOn, initialStage, trimmedNote));
+		Batch batch = batches.save(new Batch(greenhouse, plant, plantedOn, initialStage, trimmedNote));
 		String memo = trimmedNote == null ? "최초 입고" : "최초 입고 · " + trimmedNote;
 		movements.save(new Movement(batch, MovementType.INBOUND, quantity, plantedOn, memo));
 		return batch.getId();
@@ -169,12 +196,12 @@ public class LedgerService {
 		batches.deleteById(id);
 	}
 
-	private HouseSummary summarize(House house, List<Batch> allBatches, Map<Long, Long> quantities) {
+	private GreenhouseSummary summarizeGreenhouse(Greenhouse greenhouse, List<Batch> allBatches, Map<Long, Long> quantities) {
 		long batchCount = 0;
 		long total = 0;
 		long sellable = 0;
 		for (Batch batch : allBatches) {
-			if (!batch.getHouse().getId().equals(house.getId())) {
+			if (!batch.getGreenhouse().getId().equals(greenhouse.getId())) {
 				continue;
 			}
 			long quantity = quantities.getOrDefault(batch.getId(), 0L);
@@ -184,15 +211,30 @@ public class LedgerService {
 				sellable += quantity;
 			}
 		}
-		return new HouseSummary(
-				house.getId(),
-				house.getCode(),
-				house.getName(),
-				house.getCropCode(),
-				house.getCropName(),
-				house.getDayTemp(),
-				house.getNightTemp(),
-				house.getLightNote(),
+		return new GreenhouseSummary(greenhouse.getId(), greenhouse.getName(), batchCount, total, sellable);
+	}
+
+	private PlantSummary summarizePlant(Plant plant, List<Batch> allBatches, Map<Long, Long> quantities) {
+		long batchCount = 0;
+		long total = 0;
+		long sellable = 0;
+		for (Batch batch : allBatches) {
+			if (!batch.getPlant().getId().equals(plant.getId())) {
+				continue;
+			}
+			long quantity = quantities.getOrDefault(batch.getId(), 0L);
+			batchCount += 1;
+			total += quantity;
+			if (batch.getStage() == Stage.READY) {
+				sellable += quantity;
+			}
+		}
+		return new PlantSummary(
+				plant.getId(),
+				plant.getName(),
+				plant.getDayTemp(),
+				plant.getNightTemp(),
+				plant.getLightNote(),
 				batchCount,
 				total,
 				sellable);
@@ -207,13 +249,12 @@ public class LedgerService {
 	}
 
 	private BatchResponse toResponse(Batch batch, long quantity) {
-		House house = batch.getHouse();
 		return new BatchResponse(
 				batch.getId(),
-				house.getId(),
-				house.getName(),
-				house.getCropCode(),
-				house.getCropName(),
+				batch.getGreenhouse().getId(),
+				batch.getGreenhouse().getName(),
+				batch.getPlant().getId(),
+				batch.getPlant().getName(),
 				batch.getPlantedOn(),
 				batch.getStage(),
 				batch.getNote(),

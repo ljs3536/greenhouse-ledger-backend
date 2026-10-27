@@ -11,13 +11,32 @@ import org.springframework.data.repository.query.Param;
 
 public interface BatchRepository extends JpaRepository<Batch, Long> {
 
-	@Query("select b from Batch b join fetch b.house order by b.plantedOn desc, b.id desc")
-	List<Batch> findAllWithHouse();
+	@Query("""
+			select b from Batch b
+			join fetch b.greenhouse
+			join fetch b.plant
+			order by b.plantedOn desc, b.id desc
+			""")
+	List<Batch> findAllWithDetails();
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	@Query("select b from Batch b join fetch b.house where b.id = :id")
+	@Query("""
+			select b from Batch b
+			join fetch b.greenhouse
+			join fetch b.plant
+			where b.id = :id
+			""")
 	Optional<Batch> lockById(@Param("id") Long id);
 
-	@Query("select b from Batch b join fetch b.house where b.id = :id")
-	Optional<Batch> findWithHouse(@Param("id") Long id);
+	@Query("""
+			select b from Batch b
+			join fetch b.greenhouse
+			join fetch b.plant
+			where b.id = :id
+			""")
+	Optional<Batch> findWithDetails(@Param("id") Long id);
+
+	boolean existsByGreenhouse_Id(Long greenhouseId);
+
+	boolean existsByPlant_Id(Long plantId);
 }

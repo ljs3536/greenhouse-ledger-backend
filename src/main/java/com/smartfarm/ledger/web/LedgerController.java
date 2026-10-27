@@ -1,12 +1,17 @@
 package com.smartfarm.ledger.web;
 
+import com.smartfarm.ledger.service.CatalogService;
 import com.smartfarm.ledger.service.LedgerService;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchDetailResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.CreateBatchRequest;
+import com.smartfarm.ledger.web.dto.LedgerDtos.CreateGreenhouseRequest;
+import com.smartfarm.ledger.web.dto.LedgerDtos.CreatePlantRequest;
+import com.smartfarm.ledger.web.dto.LedgerDtos.GreenhouseResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.IdResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.MovementRequest;
 import com.smartfarm.ledger.web.dto.LedgerDtos.OkResponse;
+import com.smartfarm.ledger.web.dto.LedgerDtos.PlantResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.StageRequest;
 import com.smartfarm.ledger.web.dto.LedgerDtos.SummaryResponse;
 import jakarta.validation.Valid;
@@ -28,9 +33,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class LedgerController {
 
 	private final LedgerService ledger;
+	private final CatalogService catalog;
 
-	public LedgerController(LedgerService ledger) {
+	public LedgerController(LedgerService ledger, CatalogService catalog) {
 		this.ledger = ledger;
+		this.catalog = catalog;
 	}
 
 	@GetMapping("/health")
@@ -41,6 +48,52 @@ public class LedgerController {
 	@GetMapping("/summary")
 	SummaryResponse summary() {
 		return ledger.summary();
+	}
+
+	@GetMapping("/greenhouses")
+	List<GreenhouseResponse> greenhouses() {
+		return catalog.listGreenhouses();
+	}
+
+	@PostMapping("/greenhouses")
+	@ResponseStatus(HttpStatus.CREATED)
+	IdResponse createGreenhouse(@Valid @RequestBody CreateGreenhouseRequest request) {
+		return new IdResponse(catalog.createGreenhouse(request.name()));
+	}
+
+	@PatchMapping("/greenhouses/{id}")
+	OkResponse updateGreenhouse(@PathVariable long id, @Valid @RequestBody CreateGreenhouseRequest request) {
+		catalog.updateGreenhouse(id, request.name());
+		return new OkResponse(true);
+	}
+
+	@DeleteMapping("/greenhouses/{id}")
+	OkResponse deleteGreenhouse(@PathVariable long id) {
+		catalog.deleteGreenhouse(id);
+		return new OkResponse(true);
+	}
+
+	@GetMapping("/plants")
+	List<PlantResponse> plants() {
+		return catalog.listPlants();
+	}
+
+	@PostMapping("/plants")
+	@ResponseStatus(HttpStatus.CREATED)
+	IdResponse createPlant(@Valid @RequestBody CreatePlantRequest request) {
+		return new IdResponse(catalog.createPlant(request.name(), request.dayTemp(), request.nightTemp(), request.lightNote()));
+	}
+
+	@PatchMapping("/plants/{id}")
+	OkResponse updatePlant(@PathVariable long id, @Valid @RequestBody CreatePlantRequest request) {
+		catalog.updatePlant(id, request.name(), request.dayTemp(), request.nightTemp(), request.lightNote());
+		return new OkResponse(true);
+	}
+
+	@DeleteMapping("/plants/{id}")
+	OkResponse deletePlant(@PathVariable long id) {
+		catalog.deletePlant(id);
+		return new OkResponse(true);
 	}
 
 	@GetMapping("/batches")
@@ -57,7 +110,8 @@ public class LedgerController {
 	@ResponseStatus(HttpStatus.CREATED)
 	IdResponse create(@Valid @RequestBody CreateBatchRequest request) {
 		long id = ledger.createBatch(
-				request.houseId(),
+				request.greenhouseId(),
+				request.plantId(),
 				request.plantedOn(),
 				request.stage(),
 				request.quantity(),
