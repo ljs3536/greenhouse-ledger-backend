@@ -8,6 +8,14 @@ CREATE TABLE IF NOT EXISTS plants (
   growth_days INT NULL,
   spike_days INT NULL,
   bloom_days INT NULL,
+  day_temp_min DECIMAL(4, 1) NULL,
+  day_temp_max DECIMAL(4, 1) NULL,
+  night_temp_min DECIMAL(4, 1) NULL,
+  night_temp_max DECIMAL(4, 1) NULL,
+  humidity_min INT NULL,
+  humidity_max INT NULL,
+  light_min INT NULL,
+  light_max INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uk_plants_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -44,6 +52,17 @@ CREATE TABLE IF NOT EXISTS movements (
   CONSTRAINT fk_movements_batch FOREIGN KEY (batch_id) REFERENCES batches (id) ON DELETE CASCADE,
   CONSTRAINT chk_movements_quantity CHECK (quantity > 0),
   INDEX idx_movements_batch (batch_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sensor_readings (
+  greenhouse_id INT PRIMARY KEY,
+  temperature DECIMAL(4, 1) NOT NULL,
+  humidity TINYINT UNSIGNED NOT NULL,
+  light INT NOT NULL,
+  recorded_at DATETIME NOT NULL,
+  CONSTRAINT fk_sensors_greenhouse FOREIGN KEY (greenhouse_id) REFERENCES greenhouses (id) ON DELETE CASCADE,
+  CONSTRAINT chk_sensor_humidity CHECK (humidity <= 100),
+  CONSTRAINT chk_sensor_light CHECK (light >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS stage_changes (

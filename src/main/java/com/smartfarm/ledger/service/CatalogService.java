@@ -1,6 +1,7 @@
 package com.smartfarm.ledger.service;
 
 import com.smartfarm.ledger.domain.Batch;
+import com.smartfarm.ledger.domain.ClimateBounds;
 import com.smartfarm.ledger.domain.Greenhouse;
 import com.smartfarm.ledger.domain.Plant;
 import com.smartfarm.ledger.repo.BatchRepository;
@@ -8,6 +9,8 @@ import com.smartfarm.ledger.repo.GreenhouseRepository;
 import com.smartfarm.ledger.repo.PlantRepository;
 import com.smartfarm.ledger.web.dto.LedgerDtos.GreenhouseResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.PlantResponse;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -56,6 +59,14 @@ public class CatalogService {
 						plant.getGrowthDays(),
 						plant.getSpikeDays(),
 						plant.getBloomDays(),
+						plant.getDayTempMin(),
+						plant.getDayTempMax(),
+						plant.getNightTempMin(),
+						plant.getNightTempMax(),
+						plant.getHumidityMin(),
+						plant.getHumidityMax(),
+						plant.getLightMin(),
+						plant.getLightMax(),
 						counts.getOrDefault(plant.getId(), 0L)))
 				.toList();
 	}
@@ -88,9 +99,10 @@ public class CatalogService {
 	}
 
 	@Transactional
-	public long createPlant(String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays) {
+	public long createPlant(String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays, ClimateBounds bounds) {
 		String trimmed = requireName(name, "식물 이름을 입력해 주세요.");
 		ensurePlantNameFree(trimmed, null);
+		ClimateBounds checked = checkBounds(bounds);
 		return plants.save(new Plant(
 				trimmed,
 				blankToNull(dayTemp),
@@ -99,16 +111,17 @@ public class CatalogService {
 				seedlingDays,
 				growthDays,
 				spikeDays,
-				bloomDays)).getId();
+				bloomDays,
+				checked)).getId();
 	}
 
 	@Transactional
-	public void updatePlant(long id, String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays) {
+	public void updatePlant(long id, String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays, ClimateBounds bounds) {
 		Plant plant = plants.findById(id)
 				.orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "식물을 찾을 수 없습니다."));
 		String trimmed = requireName(name, "식물 이름을 입력해 주세요.");
 		ensurePlantNameFree(trimmed, id);
-		plant.update(trimmed, blankToNull(dayTemp), blankToNull(nightTemp), blankToNull(lightNote), seedlingDays, growthDays, spikeDays, bloomDays);
+		plant.update(trimmed, blankToNull(dayTemp), blankToNull(nightTemp), blankToNull(lightNote), seedlingDays, growthDays, spikeDays, bloomDays, checkBounds(bounds));
 	}
 
 	@Transactional
@@ -137,6 +150,38 @@ public class CatalogService {
 				throw new ApiException(HttpStatus.CONFLICT, "같은 이름의 온실이 있습니다.");
 			}
 		});
+	}
+
+	private ClimateBounds checkBounds(ClimateBounds bounds) {
+		requireOrder("낮 온도", bounds.dayTempMin(), bounds.dayTempMax());
+		requireOrder("밤 온도", bounds.nightTempMin(), bounds.nightTempMax());
+		requireOrder("습도", bounds.humidityMin(), bounds.humidityMax());
+		requireOrder("광량", bounds.lightMin(), bounds.lightMax());
+		return new ClimateBounds(
+				scale(bounds.dayTempMin()),
+				scale(bounds.dayTempMax()),
+				scale(bounds.nightTempMin()),
+				scale(bounds.nightTempMax()),
+				bounds.humidityMin(),
+				bounds.humidityMax(),
+				bounds.lightMin(),
+				bounds.lightMax());
+	}
+
+	private void requireOrder(String label, BigDecimal min, BigDecimal max) {
+		if (min != null && max != null && min.compareTo(max) > 0) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, label + " 최소값이 최댓값보다 큽니다.");
+		}
+	}
+
+	private void requireOrder(String label, Integer min, Integer max) {
+		if (min != null && max != null && min > max) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, label + " 최소값이 최댓값보다 큽니다.");
+		}
+	}
+
+	private BigDecimal scale(BigDecimal value) {
+		return value == null ? null : value.setScale(1, RoundingMode.HALF_UP);
 	}
 
 	private void ensurePlantNameFree(String name, Long currentId) {

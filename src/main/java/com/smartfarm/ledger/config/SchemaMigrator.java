@@ -22,6 +22,7 @@ public class SchemaMigrator implements ApplicationRunner {
 	@Override
 	public void run(ApplicationArguments args) {
 		ensureStageDayColumns();
+		ensureClimateColumns();
 		if (!tableExists("batches")) {
 			return;
 		}
@@ -59,6 +60,26 @@ public class SchemaMigrator implements ApplicationRunner {
 	private void addPlantDayColumn(String column) {
 		if (!columnExists("plants", column)) {
 			jdbc.execute("alter table plants add column " + identifier(column) + " int null");
+		}
+	}
+
+	private void ensureClimateColumns() {
+		if (!tableExists("plants")) {
+			return;
+		}
+		addPlantColumn("day_temp_min", "decimal(4,1) null");
+		addPlantColumn("day_temp_max", "decimal(4,1) null");
+		addPlantColumn("night_temp_min", "decimal(4,1) null");
+		addPlantColumn("night_temp_max", "decimal(4,1) null");
+		addPlantColumn("humidity_min", "int null");
+		addPlantColumn("humidity_max", "int null");
+		addPlantColumn("light_min", "int null");
+		addPlantColumn("light_max", "int null");
+	}
+
+	private void addPlantColumn(String column, String definition) {
+		if (!columnExists("plants", column)) {
+			jdbc.execute("alter table plants add column " + identifier(column) + " " + definition);
 		}
 	}
 

@@ -2,12 +2,18 @@ package com.smartfarm.ledger.web.dto;
 
 import com.smartfarm.ledger.domain.MovementType;
 import com.smartfarm.ledger.domain.Stage;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public final class LedgerDtos {
@@ -19,6 +25,26 @@ public final class LedgerDtos {
 			@NotBlank(message = "온실 이름을 입력해 주세요.") @Size(max = 40, message = "이름은 40자까지 입력할 수 있습니다.") String name) {
 	}
 
+	public record SensorReadingRequest(
+			@NotNull(message = "온실을 선택해 주세요.") Long greenhouseId,
+			@NotNull(message = "온도를 입력해 주세요.") @DecimalMin(value = "-20.0", message = "온도는 -20도에서 60도 사이입니다.") @DecimalMax(value = "60.0", message = "온도는 -20도에서 60도 사이입니다.") BigDecimal temperature,
+			@NotNull(message = "습도를 입력해 주세요.") @Min(value = 0, message = "습도는 0에서 100 사이입니다.") @Max(value = 100, message = "습도는 0에서 100 사이입니다.") Integer humidity,
+			@NotNull(message = "광량을 입력해 주세요.") @Min(value = 0, message = "광량은 0 이상입니다.") @Max(value = 200_000, message = "광량은 200000lx까지 입력할 수 있습니다.") Integer light) {
+	}
+
+	public record SensorPushRequest(
+			@NotEmpty(message = "전송할 센서 값이 없습니다.") @Size(max = 100, message = "한 번에 100동까지 전송할 수 있습니다.") List<@Valid SensorReadingRequest> readings) {
+	}
+
+	public record SensorReadingResponse(
+			long greenhouseId,
+			String greenhouseName,
+			BigDecimal temperature,
+			int humidity,
+			int light,
+			LocalDateTime recordedAt) {
+	}
+
 	public record CreatePlantRequest(
 			@NotBlank(message = "식물 이름을 입력해 주세요.") @Size(max = 40, message = "이름은 40자까지 입력할 수 있습니다.") String name,
 			@Size(max = 40, message = "낮 온도는 40자까지 입력할 수 있습니다.") String dayTemp,
@@ -27,7 +53,15 @@ public final class LedgerDtos {
 			@Min(value = 1, message = "기준 일수는 1 이상의 정수입니다.") @Max(value = 3650, message = "기준 일수는 3650일까지 적을 수 있습니다.") Integer seedlingDays,
 			@Min(value = 1, message = "기준 일수는 1 이상의 정수입니다.") @Max(value = 3650, message = "기준 일수는 3650일까지 적을 수 있습니다.") Integer growthDays,
 			@Min(value = 1, message = "기준 일수는 1 이상의 정수입니다.") @Max(value = 3650, message = "기준 일수는 3650일까지 적을 수 있습니다.") Integer spikeDays,
-			@Min(value = 1, message = "기준 일수는 1 이상의 정수입니다.") @Max(value = 3650, message = "기준 일수는 3650일까지 적을 수 있습니다.") Integer bloomDays) {
+			@Min(value = 1, message = "기준 일수는 1 이상의 정수입니다.") @Max(value = 3650, message = "기준 일수는 3650일까지 적을 수 있습니다.") Integer bloomDays,
+			@DecimalMin(value = "-20.0", message = "온도는 -20도에서 60도 사이입니다.") @DecimalMax(value = "60.0", message = "온도는 -20도에서 60도 사이입니다.") BigDecimal dayTempMin,
+			@DecimalMin(value = "-20.0", message = "온도는 -20도에서 60도 사이입니다.") @DecimalMax(value = "60.0", message = "온도는 -20도에서 60도 사이입니다.") BigDecimal dayTempMax,
+			@DecimalMin(value = "-20.0", message = "온도는 -20도에서 60도 사이입니다.") @DecimalMax(value = "60.0", message = "온도는 -20도에서 60도 사이입니다.") BigDecimal nightTempMin,
+			@DecimalMin(value = "-20.0", message = "온도는 -20도에서 60도 사이입니다.") @DecimalMax(value = "60.0", message = "온도는 -20도에서 60도 사이입니다.") BigDecimal nightTempMax,
+			@Min(value = 0, message = "습도는 0에서 100 사이입니다.") @Max(value = 100, message = "습도는 0에서 100 사이입니다.") Integer humidityMin,
+			@Min(value = 0, message = "습도는 0에서 100 사이입니다.") @Max(value = 100, message = "습도는 0에서 100 사이입니다.") Integer humidityMax,
+			@Min(value = 0, message = "광량은 0 이상입니다.") @Max(value = 200_000, message = "광량은 200000lx까지 입력할 수 있습니다.") Integer lightMin,
+			@Min(value = 0, message = "광량은 0 이상입니다.") @Max(value = 200_000, message = "광량은 200000lx까지 입력할 수 있습니다.") Integer lightMax) {
 	}
 
 	public record CreateBatchRequest(
@@ -62,7 +96,25 @@ public final class LedgerDtos {
 			Integer growthDays,
 			Integer spikeDays,
 			Integer bloomDays,
+			BigDecimal dayTempMin,
+			BigDecimal dayTempMax,
+			BigDecimal nightTempMin,
+			BigDecimal nightTempMax,
+			Integer humidityMin,
+			Integer humidityMax,
+			Integer lightMin,
+			Integer lightMax,
 			long batchCount) {
+	}
+
+	public record ClimateAlert(
+			long greenhouseId,
+			String greenhouseName,
+			long plantId,
+			String plantName,
+			String label,
+			String value,
+			String range) {
 	}
 
 	public record AttentionItem(
@@ -95,6 +147,7 @@ public final class LedgerDtos {
 
 	public record SummaryResponse(
 			List<AttentionItem> attention,
+			List<ClimateAlert> climate,
 			List<GreenhouseSummary> greenhouses,
 			List<PlantSummary> plants,
 			List<StageQuantity> stages,

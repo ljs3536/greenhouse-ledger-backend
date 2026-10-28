@@ -2,6 +2,7 @@ package com.smartfarm.ledger.service;
 
 import com.smartfarm.ledger.domain.Batch;
 import com.smartfarm.ledger.domain.Greenhouse;
+import com.smartfarm.ledger.domain.SensorReading;
 import com.smartfarm.ledger.domain.Movement;
 import com.smartfarm.ledger.domain.MovementType;
 import com.smartfarm.ledger.domain.Plant;
@@ -11,8 +12,10 @@ import com.smartfarm.ledger.repo.BatchRepository;
 import com.smartfarm.ledger.repo.GreenhouseRepository;
 import com.smartfarm.ledger.repo.MovementRepository;
 import com.smartfarm.ledger.repo.PlantRepository;
+import com.smartfarm.ledger.repo.SensorReadingRepository;
 import com.smartfarm.ledger.repo.StageChangeRepository;
 import com.smartfarm.ledger.web.dto.LedgerDtos.AttentionItem;
+import com.smartfarm.ledger.web.dto.LedgerDtos.ClimateAlert;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchDetailResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.GreenhouseSummary;
@@ -20,15 +23,23 @@ import com.smartfarm.ledger.web.dto.LedgerDtos.HistoryItem;
 import com.smartfarm.ledger.web.dto.LedgerDtos.PlantSummary;
 import com.smartfarm.ledger.web.dto.LedgerDtos.StageQuantity;
 import com.smartfarm.ledger.web.dto.LedgerDtos.SummaryResponse;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,18 +54,21 @@ public class LedgerService {
 	private final BatchRepository batches;
 	private final MovementRepository movements;
 	private final StageChangeRepository stageChanges;
+	private final SensorReadingRepository readings;
 
 	public LedgerService(
 			GreenhouseRepository greenhouses,
 			PlantRepository plants,
 			BatchRepository batches,
 			MovementRepository movements,
-			StageChangeRepository stageChanges) {
+			StageChangeRepository stageChanges,
+			SensorReadingRepository readings) {
 		this.greenhouses = greenhouses;
 		this.plants = plants;
 		this.batches = batches;
 		this.movements = movements;
 		this.stageChanges = stageChanges;
+		this.readings = readings;
 	}
 
 	@Transactional(readOnly = true)
@@ -88,7 +102,114 @@ public class LedgerService {
 			stages.add(new StageQuantity(stage, stageQuantities.get(stage)));
 		}
 		List<AttentionItem> attention = attention(allBatches, quantities);
-		return new SummaryResponse(attention, greenhouseSummaries, plantSummaries, stages, total, sellable, allBatches.size());
+		List<ClimateAlert> climate = climate(allBatches, quantities);
+		return new SummaryResponse(attention, climate, greenhouseSummaries, plantSummaries, stages, total, sellable, allBatches.size());
+	}
+
+	private List<ClimateAlert> climate(List<Batch> allBatches, Map<Long, Long> quantities) {
+		Map<Long, SensorReading> byGreenhouse = readings.findAll().stream()
+				.collect(Collectors.toMap(SensorReading::getGreenhouseId, Function.identity()));
+		boolean day = isDaytime(LocalTime.now(SEOUL));
+		Set<String> seen = new HashSet<>();
+		List<ClimateAlert> alerts = new ArrayList<>();
+		for (Batch batch : allBatches) {
+			if (quantities.getOrDefault(batch.getId(), 0L) <= 0) {
+				continue;
+			}
+			long greenhouseId = batch.getGreenhouse().getId();
+			long plantId = batch.getPlant().getId();
+			if (!seen.add(greenhouseId + ":" + plantId)) {
+				continue;
+			}
+			SensorReading reading = byGreenhouse.get(greenhouseId);
+			if (reading == null) {
+				continue;
+			}
+			Plant plant = batch.getPlant();
+			Greenhouse greenhouse = batch.getGreenhouse();
+			BigDecimal tempMin = day ? plant.getDayTempMin() : plant.getNightTempMin();
+			BigDecimal tempMax = day ? plant.getDayTempMax() : plant.getNightTempMax();
+			if (outside(reading.getTemperature(), tempMin, tempMax)) {
+				alerts.add(alert(greenhouse, plant, day ? "낮 온도" : "밤 온도", formatTemp(reading.getTemperature()), formatRange(tempMin, tempMax, "°C")));
+			}
+			if (outside(reading.getHumidity(), plant.getHumidityMin(), plant.getHumidityMax())) {
+				alerts.add(alert(greenhouse, plant, "습도", reading.getHumidity() + "%", formatRange(plant.getHumidityMin(), plant.getHumidityMax(), "%")));
+			}
+			if (outside(reading.getLight(), plant.getLightMin(), plant.getLightMax())) {
+				alerts.add(alert(greenhouse, plant, "광", formatLight(reading.getLight()), formatRange(plant.getLightMin(), plant.getLightMax(), "lx")));
+			}
+		}
+		alerts.sort(Comparator
+				.comparing(ClimateAlert::greenhouseId)
+				.thenComparing(ClimateAlert::plantName)
+				.thenComparingInt(item -> labelOrder(item.label())));
+		return alerts;
+	}
+
+	private static boolean isDaytime(LocalTime time) {
+		return !time.isBefore(LocalTime.of(6, 0)) && time.isBefore(LocalTime.of(18, 0));
+	}
+
+	private static ClimateAlert alert(Greenhouse greenhouse, Plant plant, String label, String value, String range) {
+		return new ClimateAlert(greenhouse.getId(), greenhouse.getName(), plant.getId(), plant.getName(), label, value, range);
+	}
+
+	private static boolean outside(BigDecimal value, BigDecimal min, BigDecimal max) {
+		if (min == null && max == null) {
+			return false;
+		}
+		if (min != null && value.compareTo(min) < 0) {
+			return true;
+		}
+		return max != null && value.compareTo(max) > 0;
+	}
+
+	private static boolean outside(int value, Integer min, Integer max) {
+		if (min == null && max == null) {
+			return false;
+		}
+		if (min != null && value < min) {
+			return true;
+		}
+		return max != null && value > max;
+	}
+
+	private static String formatTemp(BigDecimal value) {
+		return value.setScale(1, RoundingMode.HALF_UP).toPlainString() + "°C";
+	}
+
+	private static String formatLight(int value) {
+		return String.format(Locale.KOREA, "%,d", value) + "lx";
+	}
+
+	private static String formatRange(BigDecimal min, BigDecimal max, String unit) {
+		String low = min == null ? null : min.setScale(1, RoundingMode.HALF_UP).toPlainString();
+		String high = max == null ? null : max.setScale(1, RoundingMode.HALF_UP).toPlainString();
+		return joinRange(low, high, unit);
+	}
+
+	private static String formatRange(Integer min, Integer max, String unit) {
+		String low = min == null ? null : String.format(Locale.KOREA, "%,d", min);
+		String high = max == null ? null : String.format(Locale.KOREA, "%,d", max);
+		return joinRange(low, high, unit);
+	}
+
+	private static String joinRange(String min, String max, String unit) {
+		if (min != null && max != null) {
+			return min + "–" + max + unit;
+		}
+		if (min != null) {
+			return min + unit + " 이상";
+		}
+		return max + unit + " 이하";
+	}
+
+	private static int labelOrder(String label) {
+		return switch (label) {
+			case "낮 온도", "밤 온도" -> 0;
+			case "습도" -> 1;
+			default -> 2;
+		};
 	}
 
 	private List<AttentionItem> attention(List<Batch> allBatches, Map<Long, Long> quantities) {

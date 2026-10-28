@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -41,6 +42,30 @@ public class Plant {
 	@Column(name = "bloom_days")
 	private Integer bloomDays;
 
+	@Column(name = "day_temp_min", precision = 4, scale = 1)
+	private BigDecimal dayTempMin;
+
+	@Column(name = "day_temp_max", precision = 4, scale = 1)
+	private BigDecimal dayTempMax;
+
+	@Column(name = "night_temp_min", precision = 4, scale = 1)
+	private BigDecimal nightTempMin;
+
+	@Column(name = "night_temp_max", precision = 4, scale = 1)
+	private BigDecimal nightTempMax;
+
+	@Column(name = "humidity_min")
+	private Integer humidityMin;
+
+	@Column(name = "humidity_max")
+	private Integer humidityMax;
+
+	@Column(name = "light_min")
+	private Integer lightMin;
+
+	@Column(name = "light_max")
+	private Integer lightMax;
+
 	@CreationTimestamp
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
@@ -48,7 +73,7 @@ public class Plant {
 	protected Plant() {
 	}
 
-	public Plant(String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays) {
+	public Plant(String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays, ClimateBounds bounds) {
 		this.name = name;
 		this.dayTemp = dayTemp;
 		this.nightTemp = nightTemp;
@@ -57,9 +82,10 @@ public class Plant {
 		this.growthDays = growthDays;
 		this.spikeDays = spikeDays;
 		this.bloomDays = bloomDays;
+		apply(bounds);
 	}
 
-	public void update(String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays) {
+	public void update(String name, String dayTemp, String nightTemp, String lightNote, Integer seedlingDays, Integer growthDays, Integer spikeDays, Integer bloomDays, ClimateBounds bounds) {
 		this.name = name;
 		this.dayTemp = dayTemp;
 		this.nightTemp = nightTemp;
@@ -68,6 +94,18 @@ public class Plant {
 		this.growthDays = growthDays;
 		this.spikeDays = spikeDays;
 		this.bloomDays = bloomDays;
+		apply(bounds);
+	}
+
+	private void apply(ClimateBounds bounds) {
+		this.dayTempMin = bounds.dayTempMin();
+		this.dayTempMax = bounds.dayTempMax();
+		this.nightTempMin = bounds.nightTempMin();
+		this.nightTempMax = bounds.nightTempMax();
+		this.humidityMin = bounds.humidityMin();
+		this.humidityMax = bounds.humidityMax();
+		this.lightMin = bounds.lightMin();
+		this.lightMax = bounds.lightMax();
 	}
 
 	public Integer referenceDays(Stage stage) {
@@ -114,5 +152,37 @@ public class Plant {
 
 	public Integer getBloomDays() {
 		return bloomDays;
+	}
+
+	public BigDecimal getDayTempMin() {
+		return dayTempMin;
+	}
+
+	public BigDecimal getDayTempMax() {
+		return dayTempMax;
+	}
+
+	public BigDecimal getNightTempMin() {
+		return nightTempMin;
+	}
+
+	public BigDecimal getNightTempMax() {
+		return nightTempMax;
+	}
+
+	public Integer getHumidityMin() {
+		return humidityMin;
+	}
+
+	public Integer getHumidityMax() {
+		return humidityMax;
+	}
+
+	public Integer getLightMin() {
+		return lightMin;
+	}
+
+	public Integer getLightMax() {
+		return lightMax;
 	}
 }

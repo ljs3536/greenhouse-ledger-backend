@@ -1,8 +1,11 @@
 package com.smartfarm.ledger.web;
 
+import com.smartfarm.ledger.domain.ClimateBounds;
 import com.smartfarm.ledger.service.CatalogService;
 import com.smartfarm.ledger.service.LedgerService;
+import com.smartfarm.ledger.service.SensorService;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchDetailResponse;
+import com.smartfarm.ledger.web.dto.LedgerDtos.CreatePlantRequest;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.CreateBatchRequest;
 import com.smartfarm.ledger.web.dto.LedgerDtos.CreateGreenhouseRequest;
@@ -12,12 +15,15 @@ import com.smartfarm.ledger.web.dto.LedgerDtos.IdResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.MovementRequest;
 import com.smartfarm.ledger.web.dto.LedgerDtos.OkResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.PlantResponse;
+import com.smartfarm.ledger.web.dto.LedgerDtos.SensorPushRequest;
+import com.smartfarm.ledger.web.dto.LedgerDtos.SensorReadingResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.StageRequest;
 import com.smartfarm.ledger.web.dto.LedgerDtos.SummaryResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -27,6 +33,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api")
@@ -34,10 +41,12 @@ public class LedgerController {
 
 	private final LedgerService ledger;
 	private final CatalogService catalog;
+	private final SensorService sensorService;
 
-	public LedgerController(LedgerService ledger, CatalogService catalog) {
+	public LedgerController(LedgerService ledger, CatalogService catalog, SensorService sensorService) {
 		this.ledger = ledger;
 		this.catalog = catalog;
+		this.sensorService = sensorService;
 	}
 
 	@GetMapping("/health")
@@ -48,6 +57,22 @@ public class LedgerController {
 	@GetMapping("/summary")
 	SummaryResponse summary() {
 		return ledger.summary();
+	}
+
+	@GetMapping("/sensors")
+	List<SensorReadingResponse> sensors() {
+		return sensorService.latest();
+	}
+
+	@GetMapping(path = "/sensors/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	SseEmitter streamSensors() {
+		return sensorService.subscribe();
+	}
+
+	@PostMapping("/sensors")
+	OkResponse recordSensors(@Valid @RequestBody SensorPushRequest request) {
+		sensorService.record(request.readings());
+		return new OkResponse(true);
 	}
 
 	@GetMapping("/greenhouses")
@@ -89,7 +114,8 @@ public class LedgerController {
 				request.seedlingDays(),
 				request.growthDays(),
 				request.spikeDays(),
-				request.bloomDays()));
+				request.bloomDays(),
+				bounds(request)));
 	}
 
 	@PatchMapping("/plants/{id}")
@@ -103,8 +129,21 @@ public class LedgerController {
 				request.seedlingDays(),
 				request.growthDays(),
 				request.spikeDays(),
-				request.bloomDays());
+				request.bloomDays(),
+				bounds(request));
 		return new OkResponse(true);
+	}
+
+	private static ClimateBounds bounds(CreatePlantRequest request) {
+		return new ClimateBounds(
+				request.dayTempMin(),
+				request.dayTempMax(),
+				request.nightTempMin(),
+				request.nightTempMax(),
+				request.humidityMin(),
+				request.humidityMax(),
+				request.lightMin(),
+				request.lightMax());
 	}
 
 	@DeleteMapping("/plants/{id}")
