@@ -8,7 +8,11 @@ import com.smartfarm.ledger.web.dto.LedgerDtos.BatchDetailResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.CreatePlantRequest;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.CreateBatchRequest;
+import com.smartfarm.ledger.web.dto.LedgerDtos.ControlsRequest;
+import com.smartfarm.ledger.web.dto.LedgerDtos.ControlsResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.CreateGreenhouseRequest;
+import com.smartfarm.ledger.web.dto.LedgerDtos.GreenhouseControlState;
+import com.smartfarm.ledger.web.dto.LedgerDtos.GreenhouseDetailResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.CreatePlantRequest;
 import com.smartfarm.ledger.web.dto.LedgerDtos.GreenhouseResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.IdResponse;
@@ -75,9 +79,24 @@ public class LedgerController {
 		return new OkResponse(true);
 	}
 
+	@GetMapping("/controls")
+	List<GreenhouseControlState> controls() {
+		return ledger.listControls();
+	}
+
 	@GetMapping("/greenhouses")
 	List<GreenhouseResponse> greenhouses() {
 		return catalog.listGreenhouses();
+	}
+
+	@GetMapping("/greenhouses/{id}")
+	GreenhouseDetailResponse greenhouse(@PathVariable long id) {
+		return ledger.greenhouse(id);
+	}
+
+	@PatchMapping("/greenhouses/{id}/controls")
+	ControlsResponse updateControls(@PathVariable long id, @Valid @RequestBody ControlsRequest request) {
+		return ledger.updateControls(id, request);
 	}
 
 	@PostMapping("/greenhouses")

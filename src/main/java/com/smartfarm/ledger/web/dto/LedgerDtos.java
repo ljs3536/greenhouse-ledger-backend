@@ -86,6 +86,46 @@ public final class LedgerDtos {
 	public record GreenhouseResponse(long id, String name, long batchCount) {
 	}
 
+	public record ControlsRequest(
+			@NotNull(message = "난방 상태를 확인해 주세요.") Boolean heater,
+			@NotNull(message = "냉방 상태를 확인해 주세요.") Boolean cooler,
+			@NotNull(message = "환기 상태를 확인해 주세요.") Boolean vent,
+			@NotNull(message = "가습 상태를 확인해 주세요.") Boolean humidifier,
+			@NotNull(message = "보광 상태를 확인해 주세요.") Boolean growLight,
+			@NotNull(message = "차광 상태를 확인해 주세요.") Boolean shade) {
+	}
+
+	public record ControlsResponse(
+			boolean heater,
+			boolean cooler,
+			boolean vent,
+			boolean humidifier,
+			boolean growLight,
+			boolean shade) {
+	}
+
+	public record GreenhouseControlState(
+			long greenhouseId,
+			boolean heater,
+			boolean cooler,
+			boolean vent,
+			boolean humidifier,
+			boolean growLight,
+			boolean shade) {
+	}
+
+	public record ControlSuggestion(String device, String label, String effect, String plantName, String reason) {
+	}
+
+	public record GreenhouseDetailResponse(
+			long id,
+			String name,
+			SensorReadingResponse sensor,
+			ControlsResponse controls,
+			List<ControlSuggestion> suggestions,
+			List<BatchResponse> batches) {
+	}
+
 	public record PlantResponse(
 			long id,
 			String name,

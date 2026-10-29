@@ -65,6 +65,18 @@ CREATE TABLE IF NOT EXISTS sensor_readings (
   CONSTRAINT chk_sensor_light CHECK (light >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS greenhouse_controls (
+  greenhouse_id INT PRIMARY KEY,
+  heater BOOLEAN NOT NULL DEFAULT 0,
+  cooler BOOLEAN NOT NULL DEFAULT 0,
+  vent BOOLEAN NOT NULL DEFAULT 0,
+  humidifier BOOLEAN NOT NULL DEFAULT 0,
+  grow_light BOOLEAN NOT NULL DEFAULT 0,
+  shade BOOLEAN NOT NULL DEFAULT 0,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT fk_controls_greenhouse FOREIGN KEY (greenhouse_id) REFERENCES greenhouses (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS stage_changes (
   id INT AUTO_INCREMENT PRIMARY KEY,
   batch_id INT NOT NULL,

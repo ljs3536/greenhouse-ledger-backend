@@ -2,6 +2,7 @@ package com.smartfarm.ledger.service;
 
 import com.smartfarm.ledger.domain.Batch;
 import com.smartfarm.ledger.domain.Greenhouse;
+import com.smartfarm.ledger.domain.GreenhouseControl;
 import com.smartfarm.ledger.domain.SensorReading;
 import com.smartfarm.ledger.domain.Movement;
 import com.smartfarm.ledger.domain.MovementType;
@@ -9,6 +10,7 @@ import com.smartfarm.ledger.domain.Plant;
 import com.smartfarm.ledger.domain.Stage;
 import com.smartfarm.ledger.domain.StageChange;
 import com.smartfarm.ledger.repo.BatchRepository;
+import com.smartfarm.ledger.repo.GreenhouseControlRepository;
 import com.smartfarm.ledger.repo.GreenhouseRepository;
 import com.smartfarm.ledger.repo.MovementRepository;
 import com.smartfarm.ledger.repo.PlantRepository;
@@ -16,11 +18,17 @@ import com.smartfarm.ledger.repo.SensorReadingRepository;
 import com.smartfarm.ledger.repo.StageChangeRepository;
 import com.smartfarm.ledger.web.dto.LedgerDtos.AttentionItem;
 import com.smartfarm.ledger.web.dto.LedgerDtos.ClimateAlert;
+import com.smartfarm.ledger.web.dto.LedgerDtos.ControlSuggestion;
+import com.smartfarm.ledger.web.dto.LedgerDtos.ControlsRequest;
+import com.smartfarm.ledger.web.dto.LedgerDtos.ControlsResponse;
+import com.smartfarm.ledger.web.dto.LedgerDtos.GreenhouseControlState;
+import com.smartfarm.ledger.web.dto.LedgerDtos.GreenhouseDetailResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchDetailResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.BatchResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.GreenhouseSummary;
 import com.smartfarm.ledger.web.dto.LedgerDtos.HistoryItem;
 import com.smartfarm.ledger.web.dto.LedgerDtos.PlantSummary;
+import com.smartfarm.ledger.web.dto.LedgerDtos.SensorReadingResponse;
 import com.smartfarm.ledger.web.dto.LedgerDtos.StageQuantity;
 import com.smartfarm.ledger.web.dto.LedgerDtos.SummaryResponse;
 import java.math.BigDecimal;
@@ -55,6 +63,7 @@ public class LedgerService {
 	private final MovementRepository movements;
 	private final StageChangeRepository stageChanges;
 	private final SensorReadingRepository readings;
+	private final GreenhouseControlRepository controls;
 
 	public LedgerService(
 			GreenhouseRepository greenhouses,
@@ -62,13 +71,15 @@ public class LedgerService {
 			BatchRepository batches,
 			MovementRepository movements,
 			StageChangeRepository stageChanges,
-			SensorReadingRepository readings) {
+			SensorReadingRepository readings,
+			GreenhouseControlRepository controls) {
 		this.greenhouses = greenhouses;
 		this.plants = plants;
 		this.batches = batches;
 		this.movements = movements;
 		this.stageChanges = stageChanges;
 		this.readings = readings;
+		this.controls = controls;
 	}
 
 	@Transactional(readOnly = true)
@@ -251,6 +262,155 @@ public class LedgerService {
 						? -item.quantity()
 						: -(item.daysInStage() - item.referenceDays())));
 		return items;
+	}
+
+	@Transactional(readOnly = true)
+	public GreenhouseDetailResponse greenhouse(long id) {
+		Greenhouse greenhouse = greenhouses.findById(id)
+				.orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "온실을 찾을 수 없습니다."));
+		Map<Long, Long> quantities = quantitiesByBatch();
+		List<BatchResponse> houseBatches = batches.findAllWithDetails().stream()
+				.filter(batch -> batch.getGreenhouse().getId().equals(id))
+				.map(batch -> toResponse(batch, quantities.getOrDefault(batch.getId(), 0L)))
+				.toList();
+		SensorReadingResponse sensor = readings.findById(id)
+				.map(reading -> new SensorReadingResponse(
+						reading.getGreenhouseId(),
+						greenhouse.getName(),
+						reading.getTemperature(),
+						reading.getHumidity(),
+						reading.getLight(),
+						reading.getRecordedAt()))
+				.orElse(null);
+		return new GreenhouseDetailResponse(
+				greenhouse.getId(),
+				greenhouse.getName(),
+				sensor,
+				controlsOf(controls.findById(id).orElse(null)),
+				suggestions(id, quantities),
+				houseBatches);
+	}
+
+	@Transactional(readOnly = true)
+	public List<GreenhouseControlState> listControls() {
+		Map<Long, GreenhouseControl> saved = controls.findAll().stream()
+				.collect(Collectors.toMap(GreenhouseControl::getGreenhouseId, Function.identity()));
+		return greenhouses.findAll().stream()
+				.sorted(Comparator.comparing(Greenhouse::getId))
+				.map(greenhouse -> controlState(greenhouse.getId(), saved.get(greenhouse.getId())))
+				.toList();
+	}
+
+	@Transactional
+	public ControlsResponse updateControls(long id, ControlsRequest request) {
+		if (!greenhouses.existsById(id)) {
+			throw new ApiException(HttpStatus.NOT_FOUND, "온실을 찾을 수 없습니다.");
+		}
+		GreenhouseControl control = controls.findById(id).orElseGet(() -> new GreenhouseControl(id));
+		control.update(
+				request.heater(),
+				request.cooler(),
+				request.vent(),
+				request.humidifier(),
+				request.growLight(),
+				request.shade());
+		controls.save(control);
+		return controlsOf(control);
+	}
+
+	private List<ControlSuggestion> suggestions(long greenhouseId, Map<Long, Long> quantities) {
+		SensorReading reading = readings.findById(greenhouseId).orElse(null);
+		if (reading == null) {
+			return List.of();
+		}
+		boolean day = isDaytime(LocalTime.now(SEOUL));
+		Set<Long> seenPlants = new HashSet<>();
+		List<ControlSuggestion> items = new ArrayList<>();
+		for (Batch batch : batches.findAllWithDetails()) {
+			if (!batch.getGreenhouse().getId().equals(greenhouseId) || quantities.getOrDefault(batch.getId(), 0L) <= 0) {
+				continue;
+			}
+			if (!seenPlants.add(batch.getPlant().getId())) {
+				continue;
+			}
+			Plant plant = batch.getPlant();
+			BigDecimal tempMin = day ? plant.getDayTempMin() : plant.getNightTempMin();
+			BigDecimal tempMax = day ? plant.getDayTempMax() : plant.getNightTempMax();
+			String tempLabel = day ? "낮 온도" : "밤 온도";
+			if (below(reading.getTemperature(), tempMin)) {
+				items.add(suggestion("HEATER", "난방", "온도를 올립니다", plant, tempLabel, formatTemp(reading.getTemperature()), formatRange(tempMin, tempMax, "°C")));
+			} else if (above(reading.getTemperature(), tempMax)) {
+				items.add(suggestion("COOLER", "냉방", "온도를 내립니다", plant, tempLabel, formatTemp(reading.getTemperature()), formatRange(tempMin, tempMax, "°C")));
+			}
+			if (below(reading.getHumidity(), plant.getHumidityMin())) {
+				items.add(suggestion("HUMIDIFIER", "가습", "습도를 올립니다", plant, "습도", reading.getHumidity() + "%", formatRange(plant.getHumidityMin(), plant.getHumidityMax(), "%")));
+			} else if (above(reading.getHumidity(), plant.getHumidityMax())) {
+				items.add(suggestion("VENT", "환기", "습도를 내립니다", plant, "습도", reading.getHumidity() + "%", formatRange(plant.getHumidityMin(), plant.getHumidityMax(), "%")));
+			}
+			if (below(reading.getLight(), plant.getLightMin())) {
+				items.add(suggestion("GROW_LIGHT", "보광", "광을 올립니다", plant, "광", formatLight(reading.getLight()), formatRange(plant.getLightMin(), plant.getLightMax(), "lx")));
+			} else if (above(reading.getLight(), plant.getLightMax())) {
+				items.add(suggestion("SHADE", "차광", "광을 내립니다", plant, "광", formatLight(reading.getLight()), formatRange(plant.getLightMin(), plant.getLightMax(), "lx")));
+			}
+		}
+		items.sort(Comparator.comparingInt(item -> deviceOrder(item.device())));
+		return items;
+	}
+
+	private static ControlSuggestion suggestion(String device, String label, String effect, Plant plant, String metric, String value, String range) {
+		return new ControlSuggestion(device, label, effect, plant.getName(), metric + " " + value + " · 기준 " + range);
+	}
+
+	private static boolean below(BigDecimal value, BigDecimal min) {
+		return min != null && value.compareTo(min) < 0;
+	}
+
+	private static boolean above(BigDecimal value, BigDecimal max) {
+		return max != null && value.compareTo(max) > 0;
+	}
+
+	private static boolean below(int value, Integer min) {
+		return min != null && value < min;
+	}
+
+	private static boolean above(int value, Integer max) {
+		return max != null && value > max;
+	}
+
+	private static int deviceOrder(String device) {
+		return switch (device) {
+			case "HEATER" -> 0;
+			case "COOLER" -> 1;
+			case "VENT" -> 2;
+			case "HUMIDIFIER" -> 3;
+			case "GROW_LIGHT" -> 4;
+			default -> 5;
+		};
+	}
+
+	private static ControlsResponse controlsOf(GreenhouseControl control) {
+		if (control == null) {
+			return new ControlsResponse(false, false, false, false, false, false);
+		}
+		return new ControlsResponse(
+				control.isHeater(),
+				control.isCooler(),
+				control.isVent(),
+				control.isHumidifier(),
+				control.isGrowLight(),
+				control.isShade());
+	}
+
+	private static GreenhouseControlState controlState(long greenhouseId, GreenhouseControl control) {
+		ControlsResponse values = controlsOf(control);
+		return new GreenhouseControlState(
+				greenhouseId,
+				values.heater(),
+				values.cooler(),
+				values.vent(),
+				values.humidifier(),
+				values.growLight(),
+				values.shade());
 	}
 
 	@Transactional(readOnly = true)
